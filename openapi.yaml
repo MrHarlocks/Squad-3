@@ -1,0 +1,311 @@
+openapi: 3.0.3
+info:
+  title: API de Despacho Policial e Análise Geoespacial
+  description: API RESTful para ingestão em tempo real de Boletins de Ocorrência (BOs), geração de manchas criminais geoespaciais com análise sazonal e cálculo de rotas otimizadas de patrulhamento.
+  version: 1.1.0
+  contact:
+    name: Equipe de Engenharia
+    email: suporte@suaempresa.com.br
+servers:
+  - url: https://api.despacho.policia.gov.br/v1
+    description: Servidor Principal de Produção
+tags:
+  - name: Boletins
+    description: Endpoints relacionados à ingestão de boletins de ocorrência
+  - name: Manchas Criminais
+    description: Endpoints relacionados à análise geoespacial e sazonalidade
+  - name: Rotas
+    description: Endpoints relacionados à otimização de patrulhamento
+  - name: Sistema
+    description: Endpoints de suporte e saúde da API
+paths:
+  /boletins:
+    post:
+      summary: Registrar Boletim de Ocorrência (Ingestão em Tempo Real)
+      description: Recebe os dados de um novo BO para processamento contínuo, correlação temporal/espacial e atualização imediata do modelo geoespacial.
+      operationId: criarBoletim
+      tags:
+        - Boletins
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BoletimOcorrenciaInput'
+      responses:
+        '201':
+          description: Boletim recebido e processado com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoletimOcorrenciaOutput'
+        '400':
+          description: Dados inválidos ou coordenadas geográficas incorretas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespostaErro'
+        '500':
+          description: Erro interno no processamento do BO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespostaErro'
+  /manchas-criminais:
+    get:
+      summary: Consultar Mancha Criminal e Análise Sazonal
+      description: Retorna os agrupamentos geoespaciais e pontos de calor baseados em filtros de tempo, data, turno, dia da semana e tipo de crime.
+      operationId: obterManchaCriminal
+      tags:
+        - Manchas Criminais
+      parameters:
+        - name: dataInicio
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: '2026-08-01'
+        - name: dataFim
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: '2026-08-13'
+        - name: tipoCrime
+          in: query
+          required: false
+          schema:
+            type: string
+          example: ROUBO
+        - name: diaSemana
+          in: query
+          required: false
+          description: Filtro sazonal por dia da semana.
+          schema:
+            $ref: '#/components/schemas/DiaSemana'
+          example: SEXTA
+        - name: periodo
+          in: query
+          required: false
+          description: Filtro sazonal por período/turno do dia.
+          schema:
+            $ref: '#/components/schemas/PeriodoDia'
+          example: NOITE
+      responses:
+        '200':
+          description: Dados das manchas criminais retornados com sucesso (formato compatível com mapas).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManchaCriminalResponse'
+        '400':
+          description: Parâmetros de busca inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespostaErro'
+  /rotas/otimizar:
+    post:
+      summary: Gerar Rota Otimizada de Patrulhamento / Despacho
+      description: Calcula a melhor rota para uma viatura cobrir áreas críticas com base na mancha criminal ativa e localização atual.
+      operationId: otimizarRota
+      tags:
+        - Rotas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequisicaoRota'
+      responses:
+        '200':
+          description: Rota calculada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespostaRota'
+        '400':
+          description: Parâmetros de entrada ou coordenadas da viatura inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespostaErro'
+  /health:
+    get:
+      summary: Verificação de saúde da API
+      description: Endpoint simples para verificar se a aplicação está em execução.
+      operationId: healthcheck
+      tags:
+        - Sistema
+      responses:
+        '200':
+          description: API em operação.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+components:
+  schemas:
+    DiaSemana:
+      type: string
+      enum: [SEGUNDA, TERCA, QUARTA, QUINTA, SEXTA, SABADO, DOMINGO]
+    PeriodoDia:
+      type: string
+      enum: [MANHA, TARDE, NOITE, MADRUGADA]
+    Localizacao:
+      type: object
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          format: double
+          example: -16.686891
+        longitude:
+          type: number
+          format: double
+          example: -49.264794
+        endereco:
+          type: string
+          example: Av. Goiás, Centro
+    BoletimOcorrenciaInput:
+      type: object
+      required:
+        - numeroBO
+        - dataHoraOcorrencia
+        - tipoCrime
+        - localizacao
+      properties:
+        numeroBO:
+          type: string
+          example: BO-2026-089123
+        dataHoraOcorrencia:
+          type: string
+          format: date-time
+          example: '2026-08-14T22:30:00Z'
+        diaSemana:
+          $ref: '#/components/schemas/DiaSemana'
+        tipoCrime:
+          type: string
+          example: ROUBO
+        descricao:
+          type: string
+          example: Assalto a pedestre envolvendo dois suspeitos em uma moto.
+        localizacao:
+          $ref: '#/components/schemas/Localizacao'
+    BoletimOcorrenciaOutput:
+      type: object
+      required:
+        - id
+        - numeroBO
+        - statusProcessamento
+        - dataHoraCriacao
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: d3b07384-d113-460a-4c22-b5b608821d3e
+        numeroBO:
+          type: string
+          example: BO-2026-089123
+        statusProcessamento:
+          type: string
+          example: INDEXADO_EM_TEMPO_REAL
+        dataHoraCriacao:
+          type: string
+          format: date-time
+          example: '2026-08-14T22:35:00Z'
+    PontoMancha:
+      type: object
+      properties:
+        localizacao:
+          $ref: '#/components/schemas/Localizacao'
+        intensidade:
+          type: number
+          format: float
+          description: Nível de criticidade/densidade do crime (0.0 a 1.0)
+          example: 0.85
+        totalOcorrencias:
+          type: integer
+          example: 14
+    ManchaCriminalResponse:
+      type: object
+      properties:
+        totalPontosAnalisados:
+          type: integer
+          example: 120
+        diaSemanaAnalisado:
+          type: string
+          example: SEXTA
+        periodoAnalisado:
+          type: string
+          example: NOITE
+        pontosCalor:
+          type: array
+          items:
+            $ref: '#/components/schemas/PontoMancha'
+    RequisicaoRota:
+      type: object
+      required:
+        - idViatura
+        - localizacaoAtualViatura
+      properties:
+        idViatura:
+          type: string
+          example: VP-102
+        localizacaoAtualViatura:
+          $ref: '#/components/schemas/Localizacao'
+        raioAtuacaoKm:
+          type: number
+          example: 5.0
+    Waypoint:
+      type: object
+      properties:
+        ordem:
+          type: integer
+          example: 1
+        localizacao:
+          $ref: '#/components/schemas/Localizacao'
+        instrucao:
+          type: string
+          example: Patrulhar Av. Goiás por 15 minutos (Mancha crítica identificada)
+    RespostaRota:
+      type: object
+      properties:
+        idRota:
+          type: string
+          format: uuid
+          example: a81d4810-7212-421c-a937-2917e7658700
+        idViatura:
+          type: string
+          example: VP-102
+        distanciaTotalKm:
+          type: number
+          example: 12.4
+        tempoEstimadoMinutos:
+          type: integer
+          example: 35
+        pontosDePatrulhamento:
+          type: array
+          items:
+            $ref: '#/components/schemas/Waypoint'
+    RespostaErro:
+      type: object
+      properties:
+        erro:
+          type: string
+          example: VALIDATION_ERROR
+        detalhes:
+          type: array
+          items:
+            type: string
+          example:
+            - O campo 'numeroBO' é obrigatório.
+            - A coordenada de latitude está fora do intervalo esperado.
